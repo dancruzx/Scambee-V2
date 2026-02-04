@@ -1,0 +1,16 @@
+name: Keep Alive Function
+
+on:
+  schedule:
+    - cron: '*/14 * * * *' # Runs every 14 minutes to beat the 15-min sleep timer
+  workflow_dispatch: # Allows manual triggering from GitHub UI
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake Up ScamBee
+        run: |
+          echo "Pinging ScamBee to keep it awake..."
+          curl -s https://scambee-v2.onrender.com/health
+          echo "Ping complete."
