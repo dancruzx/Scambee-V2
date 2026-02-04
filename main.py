@@ -106,10 +106,12 @@ class Message(BaseModel):
     role: str
     content: str
     
+import uuid
+
 class ScamCheckRequest(BaseModel):
-    session_id: str = Field(..., description="Unique conversation ID")
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique conversation ID")
     message: str = Field(..., description="The latest message from the scammer")
-    history: List[Message] = Field(..., description="Conversation history")
+    history: List[Message] = Field(default=[], description="Conversation history")
 
 class Intelligence(BaseModel):
     upi_ids: List[str] = []
