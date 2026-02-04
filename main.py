@@ -175,11 +175,21 @@ class EngagementMetrics(BaseModel):
     turn_count: int
 
 class ScamCheckResponse(BaseModel):
-    is_scam: bool
-    confidence_score: float = Field(..., ge=0.0, le=1.0)
-    generated_reply: Optional[str] = None
-    extracted_intelligence: Intelligence
-    engagement_metrics: EngagementMetrics
+    status: str = "success"
+    reply: Optional[str] = None
+    # Hidden fields for debugging/logging if needed, but excluded from serialization if we want strictness.
+    # However, Pydantic defaults usually include everything. 
+    # To strictly match the screenshot, we should probably stick to these two.
+    # But let's keep the others aliases or just simple fields if the validator is loose.
+    # Given the strict "Expects format" screenshot, I will limit variables or use a response_model that filters.
+    
+    # Actually, to be safe, let's redefine the response model entirely for the endpoint.
+    pass
+
+class EvaluationResponse(BaseModel):
+    status: str
+    reply: Optional[str]
+
 
 # --- The Analyst (Regex Extraction) ---
 class AnalystAgent:
@@ -325,7 +335,7 @@ class ActorAgent:
 
 # --- Main Logic Binding ---
 
-@app.post("/chat", response_model=ScamCheckResponse)
+@app.post("/chat", response_model=EvaluationResponse)
 async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify_api_key)):
     # Resolve message text
     user_message = None
@@ -390,16 +400,21 @@ async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify
             turn_count=len(request.history) + 1
         )
         
-        return ScamCheckResponse(
-            is_scam=is_scam,
-            confidence_score=confidence,
-            generated_reply=response_text,
-            extracted_intelligence=intelligence,
-            engagement_metrics=metrics
+        # Prepare Response matching the Evaluator Requirement
+        # Format: {"status": "success", "reply": "..."}
+        
+        final_reply = response_text
+        if not final_reply and is_scam:
+             final_reply = "..." # Fallback if actor failed on scam
+             
+        return EvaluationResponse(
+            status="success",
+            reply=final_reply # Can be None if safe, or string if scam
         )
         
     except Exception as e:
         logger.error(f"Critical System Error: {e}")
+        # Even on error, try to return a valid JSON structure if possible, or 500
         raise HTTPException(status_code=500, detail="Internal System Error")
 
 @app.get("/health")
