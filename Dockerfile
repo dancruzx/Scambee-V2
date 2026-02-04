@@ -16,4 +16,5 @@ COPY . .
 
 # Run the web service on container startup
 # Cloud Run expects the container to listen on $PORT
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# Using 2 workers for basic concurrency reliability
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 2
