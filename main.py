@@ -108,10 +108,40 @@ class Message(BaseModel):
     
 import uuid
 
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+
+# ... (Previous imports)
+
+# Make input flexible to catch various tester formats
 class ScamCheckRequest(BaseModel):
     session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique conversation ID")
-    message: str = Field(..., description="The latest message from the scammer")
+    # Make all optional to avoid 422, then validate in logic
+    message: Optional[str] = None
+    input: Optional[str] = None 
+    text: Optional[str] = None
     history: List[Message] = Field(default=[], description="Conversation history")
+
+# ...
+
+app = FastAPI(title="Project ScamBee", description="Agentic Honey-Pot System", version="1.0.0")
+
+# Debug Handler: Log the raw body when 422 occurs
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    try:
+        body = await request.body()
+        decoded_body = body.decode()
+        logger.error(f"422 Validation Error: {exc}")
+        logger.error(f"Received Raw Body: {decoded_body}")
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors(), "received_body": decoded_body},
+        )
+    except Exception as e:
+        logger.error(f"Error in validation handler: {e}")
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
 class Intelligence(BaseModel):
     upi_ids: List[str] = []
@@ -277,17 +307,24 @@ class ActorAgent:
 
 @app.post("/chat", response_model=ScamCheckResponse)
 async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify_api_key)):
-    logger.info(f"Received Request: session_id={request.session_id} | message='{request.message}'")
+    # Resolve message from possible fields
+    user_message = request.message or request.input or request.text
+    
+    if not user_message:
+        logger.error("No valid message field found in request")
+        raise HTTPException(status_code=400, detail="Missing 'message', 'input', or 'text' field.")
+
+    logger.info(f"Received Request: session_id={request.session_id} | message='{user_message}'")
     try:
         # Parallel Execution Potential: We could run Analyst and Guard in parallel.
         # For simplicity and strictly following logic flow:
         
         # 1. Analyst (Regex) - Fast, local
-        intelligence = AnalystAgent.extract(request.message)
+        intelligence = AnalystAgent.extract(user_message)
         logger.info(f"Analyst Extraction: {intelligence}")
         
         # 2. Guard (AI) - Determines if we need the Actor
-        is_scam, confidence, mood = await GuardAgent.analyze(request.message, request.history)
+        is_scam, confidence, mood = await GuardAgent.analyze(user_message, request.history)
         logger.info(f"Guard Result: Scam={is_scam} ({confidence:.2f}) | Mood={mood}")
         
         response_text = None
@@ -296,7 +333,7 @@ async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify
         # We trigger if confidence is high enough (e.g., > 0.5) or is_scam is True
         if is_scam or confidence > 0.7:
             logger.info("Engaging Actor Agent...")
-            response_text = await ActorAgent.generate_response(request.message, request.history)
+            response_text = await ActorAgent.generate_response(user_message, request.history)
             logger.info(f"Actor Reply: '{response_text}'")
         else:
             logger.info("Message deemed safe. No Actor engagement.")
