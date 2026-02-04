@@ -320,6 +320,10 @@ async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify
 def health_check():
     return {"status": "active", "system": "ScamBee"}
 
+@app.get("/")
+def home():
+    return {"message": "Welcome to Project ScamBee! The Honey-Pot is active.", "docs_url": "/docs"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
