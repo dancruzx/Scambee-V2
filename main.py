@@ -115,13 +115,33 @@ from fastapi.exceptions import RequestValidationError
 # ... (Previous imports)
 
 # Make input flexible to catch various tester formats
-class ScamCheckRequest(BaseModel):
-    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique conversation ID")
-    # Make all optional to avoid 422, then validate in logic
-    message: Optional[str] = None
-    input: Optional[str] = None 
+from typing import List, Optional, Dict, Union, Any
+
+# ...
+
+class MessageObject(BaseModel):
+    sender: Optional[str] = None
     text: Optional[str] = None
-    history: List[Message] = Field(default=[], description="Conversation history")
+    timestamp: Optional[int] = None
+
+class ScamCheckRequest(BaseModel):
+    # Handle both sessionId (camelCase) and session_id (snake_case)
+    session_id: Optional[str] = Field(None, alias="sessionId")
+    
+    # Handle message being a string OR a nested object
+    message: Union[str, MessageObject, Dict[str, Any]] = Field(..., description="Message payload")
+    
+    # Handle camelCase history
+    history: List[Message] = Field(default=[], alias="conversationHistory")
+    
+    # Allow extra fields like 'metadata' without error
+    class Config:
+        extra = "ignore"
+        populate_by_name = True
+
+    def get_session_id(self):
+        return self.session_id or str(uuid.uuid4())
+
 
 # ...
 
@@ -307,14 +327,23 @@ class ActorAgent:
 
 @app.post("/chat", response_model=ScamCheckResponse)
 async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify_api_key)):
-    # Resolve message from possible fields
-    user_message = request.message or request.input or request.text
+    # Resolve message text
+    user_message = None
     
+    if isinstance(request.message, str):
+        user_message = request.message
+    elif isinstance(request.message, MessageObject):
+        user_message = request.message.text
+    elif isinstance(request.message, dict):
+        user_message = request.message.get("text") or request.message.get("content")
+        
     if not user_message:
-        logger.error("No valid message field found in request")
-        raise HTTPException(status_code=400, detail="Missing 'message', 'input', or 'text' field.")
+        # Fallback to other fields if root message failed
+        logger.error(f"Could not extract text from message object: {request.message}")
+        raise HTTPException(status_code=400, detail="Could not extract text from 'message' field.")
 
-    logger.info(f"Received Request: session_id={request.session_id} | message='{user_message}'")
+    current_session_id = request.get_session_id()
+    logger.info(f"Received Request: session_id={current_session_id} | message='{user_message}'")
     try:
         # Parallel Execution Potential: We could run Analyst and Guard in parallel.
         # For simplicity and strictly following logic flow:
