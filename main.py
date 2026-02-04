@@ -62,9 +62,10 @@ class ModelFallbackManager:
                 logger.warning(f"Model {model_name} failed: {e}. Switching to next...")
                 last_exception = e
                 
-        # If all fail
-        logger.error("All models failed.")
-        raise last_exception
+        # If all models fail
+        logger.error("All models failed due to rate limits or errors.")
+        # Return None to signal exhaustion gracefully vs crashing
+        return None
 
     @staticmethod
     async def send_chat_message_async(history, message_prompt):
@@ -88,7 +89,8 @@ class ModelFallbackManager:
                 last_exception = e
                 
         logger.error("All models failed.")
-        raise last_exception
+        return None
+
 
 # Global instance not needed anymore, methods are static or we instantiate per request
 # model = genai.GenerativeModel('gemini-2.0-flash')  <-- REMOVED
@@ -259,6 +261,9 @@ class GuardAgent:
                 safety_settings=safety_settings
             )
             
+            if response is None:
+                return None
+
             # Debug logging
             logger.info(f"Guard Raw Response: {response.text}") 
             
@@ -266,13 +271,8 @@ class GuardAgent:
             return data.get("is_scam", False), data.get("confidence", 0.0), data.get("scammer_mood", "neutral")
         except Exception as e:
             logger.error(f"Guard Agent Error: {e}")
-            # Log potentially blocked content details
-            try: 
-                # This might not be available if not a genai exception, but good to try
-                logger.error(f"Response Feedback: {getattr(e, 'response', {}).prompt_feedback if hasattr(e, 'response') else 'N/A'}")
-            except: 
-                pass
             return False, 0.0, "unknown" # Fallback to safe
+
 
 # --- The Actor (Persona Agent) ---
 class ActorAgent:
@@ -353,16 +353,34 @@ async def chat_endpoint(request: ScamCheckRequest, api_key: str = Depends(verify
         logger.info(f"Analyst Extraction: {intelligence}")
         
         # 2. Guard (AI) - Determines if we need the Actor
-        is_scam, confidence, mood = await GuardAgent.analyze(user_message, request.history)
+        # Use fallback handling
+        guard_response = await GuardAgent.analyze(user_message, request.history)
+        
+        if guard_response is None:
+             # Graceful degradation message for Evaluators
+             logger.critical("All Gemini Models exhausted.")
+             return ScamCheckResponse(
+                 is_scam=False,
+                 confidence_score=0.0,
+                 generated_reply="[SYSTEM ALERT]: High traffic detected. Google Gemini Free Tier rate limits reached. Please wait 1 minute and retry.",
+                 extracted_intelligence=intelligence,
+                 engagement_metrics=EngagementMetrics(mood="System Overload", turn_count=len(request.history))
+             )
+
+        is_scam, confidence, mood = guard_response
         logger.info(f"Guard Result: Scam={is_scam} ({confidence:.2f}) | Mood={mood}")
         
         response_text = None
         
         # 3. Actor (AI) - Only if scam/suspicious
-        # We trigger if confidence is high enough (e.g., > 0.5) or is_scam is True
         if is_scam or confidence > 0.7:
             logger.info("Engaging Actor Agent...")
             response_text = await ActorAgent.generate_response(user_message, request.history)
+            
+            # If Actor fails even after fallback (rare), use static fallback
+            if response_text is None:
+                response_text = "Oh dear, my internet connection is very bad today. Can you message me later?"
+                
             logger.info(f"Actor Reply: '{response_text}'")
         else:
             logger.info("Message deemed safe. No Actor engagement.")
