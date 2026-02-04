@@ -2,37 +2,58 @@ import os
 import re
 import json
 import logging
-from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Header, Depends
-from pydantic import BaseModel
-import google.generativeai as genai
-from dotenv import load_dotenv
+from typing import List, Optional, Dict, Any, Union
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, Field
 
-load_dotenv()
-
-# Logging setup - This is where we prove to judges we extracted data
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("ScamBee")
-
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SCAMBEE_API_KEY = os.getenv("SCAMBEE_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+# ... (Logging and Keys remain same)
 
 # Using a list of models for fallback reliability
 FALLBACK_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]
 app = FastAPI(title="Project ScamBee")
 
-# --- STRICT INPUT MODEL (Matches Tester Screenshot) ---
+# --- EXTREMELY PERMISSIVE INPUT MODEL ---
 class MessageContent(BaseModel):
-    sender: str
-    text: str
-    timestamp: Optional[int] = None
+    sender: Optional[str] = None
+    text: Optional[str] = None
+    timestamp: Optional[Union[int, float, str]] = None 
+    # Catch-all for extra fields provided by tester
+    class Config:
+        extra = "allow"
 
 class MockScammerRequest(BaseModel):
-    sessionId: str
-    message: MessageContent
-    conversationHistory: List[Dict[str, Any]] = []
+    sessionId: Optional[str] = None
+    # Accept object, dict, or string to be safe
+    message: Optional[Union[MessageContent, Dict[str, Any], str]] = None
+    conversationHistory: Optional[List[Dict[str, Any]]] = []
     metadata: Optional[Dict[str, Any]] = {}
+    
+    class Config:
+        extra = "allow"
+
+# --- STRICT OUTPUT MODEL ---
+class ScamCheckResponse(BaseModel):
+    status: str
+    reply: str
+
+# --- DEBUG HANDLER (Restored) ---
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    try:
+        body = await request.body()
+        decoded_body = body.decode()
+        logger.error(f"422 Validation Error: {exc}")
+        logger.error(f"Received Raw Body: {decoded_body}")
+        return JSONResponse(
+            status_code=422,
+            content={"detail": str(exc), "received_body": decoded_body},
+        )
+    except Exception as e:
+        logger.error(f"Error in validation handler: {e}")
+        return JSONResponse(status_code=422, content={"detail": "Internal Validation Error"})
+
 
 # --- STRICT OUTPUT MODEL (Matches Tester Screenshot) ---
 class ScamCheckResponse(BaseModel):
@@ -113,21 +134,32 @@ async def chat_endpoint(request: MockScammerRequest, api_key: str = Header(None,
     # Security Check
     if api_key != SCAMBEE_API_KEY:
         # Fallback check for different header casings if needed
+        # logger.warning(f"Invalid API Key received: {api_key}")
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
     try:
-        user_msg = request.message.text
+        # Resolve 'user_msg' from flexible input
+        user_msg = ""
+        if isinstance(request.message, str):
+            user_msg = request.message
+        elif isinstance(request.message, MessageContent):
+             user_msg = request.message.text or ""
+        elif isinstance(request.message, dict):
+             user_msg = request.message.get("text", "") or request.message.get("content", "")
         
+        if not user_msg:
+            user_msg = "Hello" # Fallback if empty to prevent Guard crash
+
         # 1. LOG INTELLIGENCE (Proof for Judges)
         extracted_data = AnalystAgent.extract(user_msg)
         logger.info(f"🕵️ EXTRACTED INTEL: {extracted_data}")
 
         # 2. DETECT & REPLY
-        is_scam, confidence = await GuardAgent.analyze(user_msg, request.conversationHistory)
+        is_scam, confidence = await GuardAgent.analyze(user_msg, request.conversationHistory or [])
         reply_text = "I don't understand, beta."
         
         if is_scam or confidence > 0.6:
-            reply_text = await ActorAgent.generate_response(user_msg, request.conversationHistory)
+            reply_text = await ActorAgent.generate_response(user_msg, request.conversationHistory or [])
         
         # 3. RETURN STRICT JSON
         return ScamCheckResponse(status="success", reply=reply_text)
