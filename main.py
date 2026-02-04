@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 # ... (Logging and Keys remain same)
 
 # Using a list of models for fallback reliability
-FALLBACK_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]
+FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
 app = FastAPI(title="Project ScamBee")
 
 # --- EXTREMELY PERMISSIVE INPUT MODEL ---
@@ -167,3 +167,11 @@ async def chat_endpoint(request: MockScammerRequest, api_key: str = Header(None,
     except Exception as e:
         logger.error(f"ERROR: {e}")
         return ScamCheckResponse(status="error", reply="System maintenance.")
+
+@app.get("/health")
+def health_check():
+    return {"status": "active"}
+
+@app.get("/")
+def home():
+    return {"message": "ScamBee Active"}
