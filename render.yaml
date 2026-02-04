@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: scambee-api
+    runtime: docker
+    plan: free
+    region: singapore # or ohio, frankfurt, etc.
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SCAMBEE_API_KEY
+        sync: false
+    dockerCommand: ./Dockerfile
