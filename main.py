@@ -22,8 +22,19 @@ SCAMBEE_API_KEY = os.getenv("SCAMBEE_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
 # Using a list of models for fallback reliability
-# Using a list of models for fallback reliability
-FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]
+# Using a list of models for fallback reliability (Ordered by Latency/Speed)
+FALLBACK_MODELS = [
+    "gemini-2.0-flash-lite",      # Fastest
+    "gemini-2.5-flash-lite",      # Fast
+    "gemini-flash-lite-latest",   # Fast Catch-all
+    "gemini-2.5-flash",           # Balanced Speed/Quality
+    "gemini-2.0-flash",           # Balanced
+    "gemini-flash-latest",        # Balanced Catch-all
+    "gemini-2.5-pro",             # High Quality
+    "gemini-2.0-pro",             # High Quality
+    "gemini-3.0-flash-preview",   # Experimental Speed
+    "gemini-3.0-pro-preview"      # Experimental Quality
+]
 app = FastAPI(title="Project ScamBee")
 
 # --- EXTREMELY PERMISSIVE INPUT MODEL ---
