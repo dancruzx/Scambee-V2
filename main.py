@@ -30,10 +30,7 @@ FALLBACK_MODELS = [
     "gemini-2.5-flash",           # Balanced Speed/Quality
     "gemini-2.0-flash",           # Balanced
     "gemini-flash-latest",        # Balanced Catch-all
-    "gemini-2.5-pro",             # High Quality
-    "gemini-2.0-pro",             # High Quality
-    "gemini-3.0-flash-preview",   # Experimental Speed
-    "gemini-3.0-pro-preview"      # Experimental Quality
+    "gemini-2.5-pro"              # High Quality
 ]
 app = FastAPI(title="Project ScamBee")
 
