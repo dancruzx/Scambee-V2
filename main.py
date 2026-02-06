@@ -104,18 +104,91 @@ class AnalystAgent:
     UPI_PATTERN = re.compile(r"[\w\.\-_]+@[\w]+")
     # Generic 9-18 digit numbers for bank accounts
     BANK_ACCT_PATTERN = re.compile(r"\b(?:\d{9,18})\b")
+    # Phone Pattern (India + Generic)
+    PHONE_PATTERN = re.compile(r"(\+91[\-\s]?)?[6-9]\d{9}")
     URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[/\w\.-]*")
 
     @staticmethod
     def extract(text: str) -> dict:
         upis = list(set(AnalystAgent.UPI_PATTERN.findall(text)))
         accounts = list(set(AnalystAgent.BANK_ACCT_PATTERN.findall(text)))
+        phones = list(set(AnalystAgent.PHONE_PATTERN.findall(text)))
         urls = list(set(AnalystAgent.URL_PATTERN.findall(text)))
-        return {"upi_ids": upis, "bank_accounts": accounts, "urls": urls}
+        return {"upi_ids": upis, "bank_accounts": accounts, "urls": urls, "phone_numbers": phones}
 
+import random
+
+# --- OFFLINE FALLBACK SYSTEM (Python-Only Intelligence) ---
+class OfflineGuard:
+    """Heuristic-based scam detection when AI fails."""
+    SCAM_KEYWORDS = [
+        "urgent", "immediately", "block", "suspend", "verify", "kyc", 
+        "otp", "card", "expire", "unauthorized", "click", "link", "debit"
+    ]
+    
+    @staticmethod
+    def analyze(text: str) -> tuple[bool, float]:
+        text_lower = text.lower()
+        match_count = sum(1 for word in OfflineGuard.SCAM_KEYWORDS if word in text_lower)
+        
+        # Simple scoring: 2+ keywords = High prob scam
+        if match_count >= 2:
+            return True, 0.85
+        elif match_count == 1:
+            return True, 0.60
+        return False, 0.0
+
+class OfflineActor:
+    """Rule-based Persona (Mrs. Lakshmi) when AI fails."""
+    
+    PATTERNS = {
+        r"(?i)(otp|code|pin|password)": [
+            "What code beta? My phone screen is broken.", 
+            "Is that the number written on the back of the card?",
+            "I didn't receive any SMS. Signal is weak here."
+        ],
+        r"(?i)(bank|account|statement|money|fund)": [
+            "I don't use internet banking. Can I visit the Andheri branch?", 
+            "My grandson handles the accounts, he is not home.",
+            "Why is the bank messaging me on this number?"
+        ],
+        r"(?i)(urgent|block|suspend|expire|immediate)": [
+            "Don't scare me beta! I have my pension in there.", 
+            "Why the hurry? My knees act up when I rush.",
+            "Can I come to the bank tomorrow morning instead?"
+        ],
+        r"(?i)(link|click|website|app)": [
+            "I don't have a smart phone. Just a Nokia.",
+            "I cannot click. My fingers are trembling.",
+            "What is a URL? Is that the blue text?"
+        ],
+        r"(?i)(police|court|legal|jail)": [
+            "I am a retired teacher! I have done nothing wrong!",
+            "Let me call my lawyer son-in-law.",
+            "God is watching you beta."
+        ]
+    }
+    
+    DEFAULTS = [
+        "I don't understand these modern things.",
+        "Can you explain plainly? I am 72 years old.",
+        "My internet is very slow today...",
+        "Hello? Are you still there?",
+        "I need to find my spectacles, hold on."
+    ]
+
+    @staticmethod
+    def generate_response(message: str) -> str:
+        for pattern, responses in OfflineActor.PATTERNS.items():
+            if re.search(pattern, message):
+                return random.choice(responses)
+        return random.choice(OfflineActor.DEFAULTS)
+
+# --- AGENT WRAPPERS (Hybrid AI + Offline) ---
 class GuardAgent:
     @staticmethod
     async def analyze(message: str, history: List[Dict]) -> tuple[bool, float]:
+        # 1. Try AI Analysis
         prompt = f"""
         Analyze if this is a scam. 
         Message: "{message}"
@@ -124,17 +197,21 @@ class GuardAgent:
         """
         try:
             res = await generate_with_fallback(prompt, is_json=True)
-            if not res: return False, 0.0
-            data = json.loads(res)
-            return data.get("is_scam", False), data.get("confidence", 0.0)
-        except:
-            return False, 0.0
+            if res:
+                data = json.loads(res)
+                return data.get("is_scam", False), data.get("confidence", 0.0)
+        except Exception as e:
+            logger.warning(f"AI Guard Failed: {e}")
+        
+        # 2. Fallback to Offline Heuristics
+        logger.info("Falling back to Offline Guard")
+        return OfflineGuard.analyze(message)
 
 class ActorAgent:
     SYSTEM = "You are Mrs. Lakshmi, 72. Polite, confused, wastes scammers' time. Keep replies short. Do not reveal you are AI."
     @staticmethod
     async def generate_response(message: str, history: List[Dict]) -> str:
-        # Simplified context for the actor
+        # 1. Try AI Generation
         hist_str = str(history[-2:]) if history else "[]"
         prompt = f"""
         {ActorAgent.SYSTEM}
@@ -144,9 +221,13 @@ class ActorAgent:
         """
         try:
             res = await generate_with_fallback(prompt, is_json=False)
-            return res.strip() if res else "Oh dear, my connection is poor."
-        except:
-            return "Oh dear, connection error."
+            if res: return res.strip()
+        except Exception as e:
+            logger.warning(f"AI Actor Failed: {e}")
+            
+        # 2. Fallback to Offline Rules
+        logger.info("Falling back to Offline Actor")
+        return OfflineActor.generate_response(message)
 
 import httpx
 from fastapi import BackgroundTasks
