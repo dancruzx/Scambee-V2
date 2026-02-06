@@ -117,74 +117,71 @@ class AnalystAgent:
         return {"upi_ids": upis, "bank_accounts": accounts, "urls": urls, "phone_numbers": phones}
 
 import random
+import difflib
 
-# --- OFFLINE FALLBACK SYSTEM (Python-Only Intelligence) ---
-class OfflineGuard:
-    """Heuristic-based scam detection when AI fails."""
-    SCAM_KEYWORDS = [
-        "urgent", "immediately", "block", "suspend", "verify", "kyc", 
-        "otp", "card", "expire", "unauthorized", "click", "link", "debit"
-    ]
-    
-    @staticmethod
-    def analyze(text: str) -> tuple[bool, float]:
+# --- SMART OFFLINE SYSTEM (Data-Driven) ---
+class SmartOfflineSystem:
+    _data = {}
+
+    @classmethod
+    def load_data(cls):
+        try:
+            with open("offline_knowledge.json", "r") as f:
+                cls._data = json.load(f)
+            logger.info("✅ Hybrid Offline Knowledge Base Loaded")
+        except Exception as e:
+            logger.error(f"Failed to load Offline KB: {e}")
+            # Fallback hardcoded mini-knowledge
+            cls._data = {
+                "scam_weights": {"urgent": 0.8, "otp": 0.9},
+                "intents": [],
+                "default_responses": ["I don't understand.", "Connection error."]
+            }
+
+    @classmethod
+    def analyze_scam(cls, text: str) -> tuple[bool, float]:
+        """Weighted keyword scoring"""
         text_lower = text.lower()
-        match_count = sum(1 for word in OfflineGuard.SCAM_KEYWORDS if word in text_lower)
+        score = 0.0
+        weights = cls._data.get("scam_weights", {})
         
-        # Simple scoring: 2+ keywords = High prob scam
-        if match_count >= 2:
-            return True, 0.85
-        elif match_count == 1:
-            return True, 0.60
-        return False, 0.0
+        for word, weight in weights.items():
+            if word in text_lower:
+                score += weight
+        
+        # Normalize: If score > 1.0, high confidence
+        probability = min(score, 1.0)
+        return (probability > 0.4), probability
 
-class OfflineActor:
-    """Rule-based Persona (Mrs. Lakshmi) when AI fails."""
-    
-    PATTERNS = {
-        r"(?i)(otp|code|pin|password)": [
-            "What code beta? My phone screen is broken.", 
-            "Is that the number written on the back of the card?",
-            "I didn't receive any SMS. Signal is weak here."
-        ],
-        r"(?i)(bank|account|statement|money|fund)": [
-            "I don't use internet banking. Can I visit the Andheri branch?", 
-            "My grandson handles the accounts, he is not home.",
-            "Why is the bank messaging me on this number?"
-        ],
-        r"(?i)(urgent|block|suspend|expire|immediate)": [
-            "Don't scare me beta! I have my pension in there.", 
-            "Why the hurry? My knees act up when I rush.",
-            "Can I come to the bank tomorrow morning instead?"
-        ],
-        r"(?i)(link|click|website|app)": [
-            "I don't have a smart phone. Just a Nokia.",
-            "I cannot click. My fingers are trembling.",
-            "What is a URL? Is that the blue text?"
-        ],
-        r"(?i)(police|court|legal|jail)": [
-            "I am a retired teacher! I have done nothing wrong!",
-            "Let me call my lawyer son-in-law.",
-            "God is watching you beta."
-        ]
-    }
-    
-    DEFAULTS = [
-        "I don't understand these modern things.",
-        "Can you explain plainly? I am 72 years old.",
-        "My internet is very slow today...",
-        "Hello? Are you still there?",
-        "I need to find my spectacles, hold on."
-    ]
+    @classmethod
+    def generate_reply(cls, message: str) -> str:
+        """Fuzzy matching for intents"""
+        message_lower = message.lower()
+        best_intent = None
+        best_ratio = 0.0
+        
+        # Check all intents for fuzzy matches
+        for intent in cls._data.get("intents", []):
+            for trigger in intent["triggers"]:
+                # Check for direct substring or fuzzy match
+                if trigger in message_lower:
+                    return random.choice(intent["responses"])
+                
+                # difflib fuzzy match (slower, but covers typos)
+                ratio = difflib.SequenceMatcher(None, trigger, message_lower).ratio()
+                if ratio > 0.6 and ratio > best_ratio:
+                    best_ratio = ratio
+                    best_intent = intent
 
-    @staticmethod
-    def generate_response(message: str) -> str:
-        for pattern, responses in OfflineActor.PATTERNS.items():
-            if re.search(pattern, message):
-                return random.choice(responses)
-        return random.choice(OfflineActor.DEFAULTS)
+        if best_intent:
+            return random.choice(best_intent["responses"])
+            
+        return random.choice(cls._data.get("default_responses", ["I don't understand."]))
 
-# --- AGENT WRAPPERS (Hybrid AI + Offline) ---
+# Load data on startup
+SmartOfflineSystem.load_data()
+
+# --- AGENT WRAPPERS (Hybrid AI + Smart Offline) ---
 class GuardAgent:
     @staticmethod
     async def analyze(message: str, history: List[Dict]) -> tuple[bool, float]:
@@ -203,9 +200,9 @@ class GuardAgent:
         except Exception as e:
             logger.warning(f"AI Guard Failed: {e}")
         
-        # 2. Fallback to Offline Heuristics
-        logger.info("Falling back to Offline Guard")
-        return OfflineGuard.analyze(message)
+        # 2. Fallback to Smart Offline
+        logger.info("Falling back to Smart Offline Guard")
+        return SmartOfflineSystem.analyze_scam(message)
 
 class ActorAgent:
     SYSTEM = "You are Mrs. Lakshmi, 72. Polite, confused, wastes scammers' time. Keep replies short. Do not reveal you are AI."
@@ -225,9 +222,9 @@ class ActorAgent:
         except Exception as e:
             logger.warning(f"AI Actor Failed: {e}")
             
-        # 2. Fallback to Offline Rules
-        logger.info("Falling back to Offline Actor")
-        return OfflineActor.generate_response(message)
+        # 2. Fallback to Smart Offline
+        logger.info("Falling back to Smart Offline Actor")
+        return SmartOfflineSystem.generate_reply(message)
 
 import httpx
 from fastapi import BackgroundTasks

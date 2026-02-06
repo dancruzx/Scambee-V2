@@ -1,0 +1,136 @@
+{
+    "scam_weights": {
+        "urgent": 0.8,
+        "immediately": 0.8,
+        "block": 0.9,
+        "suspend": 0.9,
+        "verify": 0.6,
+        "kyc": 0.8,
+        "otp": 0.95,
+        "card": 0.5,
+        "expire": 0.7,
+        "unauthorized": 0.7,
+        "click": 0.6,
+        "link": 0.6,
+        "debit": 0.5,
+        "police": 0.9,
+        "jail": 0.9,
+        "court": 0.8,
+        "arrest": 0.9,
+        "winner": 0.7,
+        "lottery": 0.8,
+        "prize": 0.7,
+        "claim": 0.6,
+        "refund": 0.6,
+        "customer care": 0.4,
+        "teamviewer": 0.9,
+        "anydesk": 0.9
+    },
+    "intents": [
+        {
+            "name": "otp_request",
+            "triggers": [
+                "share the otp",
+                "give me the code",
+                "read the sms",
+                "one time password",
+                "6 digit code",
+                "verify your mobile number",
+                "send the pin"
+            ],
+            "responses": [
+                "Which code beta? Is it the one on the electricity bill?",
+                "My screen is broken, I cannot read small numbers.",
+                "Wait, let me put on my spectacles... oh, the battery died.",
+                "Is the OTP 1-2-3-4? That is what I use for my suitcase.",
+                "Why do you need a code? Can't you just unlock it from there?",
+                "I didn't receive any SMS. Only a message from my niece."
+            ]
+        },
+        {
+            "name": "account_block_threat",
+            "triggers": [
+                "account will be blocked",
+                "blocked in 2 hours",
+                "permanent suspension",
+                "kyc pending",
+                "update pan card",
+                "identity verification",
+                "service stop"
+            ],
+            "responses": [
+                "Blocked? Oh no! But I need to buy milk tomorrow!",
+                "Can I come to the branch and shout at the manager?",
+                "My son said not to worry about these messages. Is he wrong?",
+                "Which account? The one with 500 rupees or the one with... oh never mind.",
+                "Don't scare an old lady! My blood pressure is rising!",
+                "I updated my KYC in 1995. Is that not enough?"
+            ]
+        },
+        {
+            "name": "money_transfer",
+            "triggers": [
+                "send money",
+                "transfer funds",
+                "pay the fee",
+                "registration charge",
+                "refundable amount",
+                "upi payment",
+                "gpay",
+                "phonepe"
+            ],
+            "responses": [
+                "I don't have GPay. Is that like a cheque?",
+                "Can I send you a money order from the post office?",
+                "My grandson took all my money for his video games.",
+                "I tried to send but the internet light is blinking red.",
+                "How do I put cash into the phone? There is no slot."
+            ]
+        },
+        {
+            "name": "app_install",
+            "triggers": [
+                "download the app",
+                "install teamviewer",
+                "install anydesk",
+                "click the link",
+                "open the support app",
+                "screen share"
+            ],
+            "responses": [
+                "I have a Nokia 3310. It has Snake game only.",
+                "My grandson said never download apps from strangers.",
+                "It says 'Memory Full'. Should I delete my cat photos?",
+                "I clicked it and now the screen is black. Hello?",
+                "What is an App Store? Is it near the vegetable market?"
+            ]
+        },
+        {
+            "name": "police_threat",
+            "triggers": [
+                "police case",
+                "fir registered",
+                "arrest warrant",
+                "cyber crime",
+                "illegal activity",
+                "money laundering",
+                "drugs found"
+            ],
+            "responses": [
+                "Police? I am a retired school teacher! I have never jaywalked!",
+                "Let me call my lawyer son-in-law. Ideally he should talk to you.",
+                "God is watching you beta. Do not lie to an elder.",
+                "I will come to the police station myself. Which one?",
+                "My heart condition cannot take this stress. Calling my neighbor."
+            ]
+        }
+    ],
+    "default_responses": [
+        "I don't understand these modern things.",
+        "Can you explain plainly? I am 72 years old.",
+        "My internet is very slow today... hello?",
+        "I need to find my spectacles, hold on.",
+        "Beta, why do you sound like a robot?",
+        "The connection is very poor. Speak louder."
+    ]
+}
