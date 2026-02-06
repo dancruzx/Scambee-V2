@@ -272,7 +272,14 @@ async def chat_endpoint(request: MockScammerRequest, background_tasks: Backgroun
             user_msg = "Hello"
 
         # 1. LOG INTELLIGENCE
-        extracted_data = AnalystAgent.extract(user_msg)
+        # Concatenate ALL history + current message to catch info shared earlier
+        full_conversation_text = user_msg
+        if request.conversationHistory:
+            for msg in request.conversationHistory:
+                if isinstance(msg, dict):
+                    full_conversation_text += " " + str(msg.get("text", ""))
+        
+        extracted_data = AnalystAgent.extract(full_conversation_text)
         logger.info(f"🕵️ EXTRACTED INTEL: {extracted_data}")
 
         # 2. DETECT & REPLY
@@ -295,7 +302,7 @@ async def chat_endpoint(request: MockScammerRequest, background_tasks: Backgroun
                 "bankAccounts": get_l(extracted_data, "bank_accounts"),
                 "upiIds": get_l(extracted_data, "upi_ids"),
                 "phishingLinks": get_l(extracted_data, "urls"),
-                "phoneNumbers": [], # Regex not implemented yet, sending empty
+                "phoneNumbers": get_l(extracted_data, "phone_numbers"), 
                 "suspiciousKeywords": ["scam", "urgent", "verify"] # Placeholder/Generic
             }
             
