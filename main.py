@@ -102,18 +102,33 @@ async def generate_with_fallback(prompt: str, is_json: bool = False) -> str:
 
 class AnalystAgent:
     UPI_PATTERN = re.compile(r"[\w\.\-_]+@[\w]+")
-    # Generic 9-18 digit numbers for bank accounts
-    BANK_ACCT_PATTERN = re.compile(r"\b(?:\d{9,18})\b")
-    # Phone Pattern (India + Generic)
-    PHONE_PATTERN = re.compile(r"(\+91[\-\s]?)?[6-9]\d{9}")
-    URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[/\w\.-]*")
-
+    # Phone Pattern: Matches +91 (optional) followed by 10 digits starting with 6-9
+    PHONE_PATTERN = re.compile(r"(?:\+91[\-\s]?)?[6-9]\d{9}")
+    # Bank Account: 9-18 digits, avoiding typical phone numbers
+    BANK_ACCT_PATTERN = re.compile(r"\b\d{9,18}\b")
+    
     @staticmethod
     def extract(text: str) -> dict:
-        upis = list(set(AnalystAgent.UPI_PATTERN.findall(text)))
-        accounts = list(set(AnalystAgent.BANK_ACCT_PATTERN.findall(text)))
+        # 1. Extract Phones First
         phones = list(set(AnalystAgent.PHONE_PATTERN.findall(text)))
+        
+        # 2. Extract Bank Accounts (excluding phones)
+        # We find all digit sequences, then filter out those that are already in 'phones'
+        all_numbers = list(set(AnalystAgent.BANK_ACCT_PATTERN.findall(text)))
+        
+        # Filter logic: A bank account shouldn't be exactly the same as a found phone number
+        # Clean phones for comparison (remove +91, spaces)
+        clean_phones = [p.replace("+91", "").replace("-", "").replace(" ", "") for p in phones]
+        
+        accounts = []
+        for num in all_numbers:
+            # If this number (or a version of it) is not in our phone list, it's an account
+            if num not in clean_phones and num not in phones:
+                accounts.append(num)
+
+        upis = list(set(AnalystAgent.UPI_PATTERN.findall(text)))
         urls = list(set(AnalystAgent.URL_PATTERN.findall(text)))
+        
         return {"upi_ids": upis, "bank_accounts": accounts, "urls": urls, "phone_numbers": phones}
 
 import random
@@ -328,7 +343,3 @@ def health_check():
 @app.get("/")
 def home():
     return {"message": "ScamBee Active"}
-
-@app.post("/")
-def home_post():
-    return {"message": "ScamBee Active. Please use /chat endpoint."}
