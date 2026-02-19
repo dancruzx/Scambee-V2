@@ -328,3 +328,7 @@ def health_check():
 @app.get("/")
 def home():
     return {"message": "ScamBee Active"}
+
+@app.post("/")
+def home_post():
+    return {"message": "ScamBee Active. Please use /chat endpoint."}
