@@ -106,6 +106,8 @@ class AnalystAgent:
     PHONE_PATTERN = re.compile(r"(?:\+91[\-\s]?)?[6-9]\d{9}")
     # Bank Account: 9-18 digits, avoiding typical phone numbers
     BANK_ACCT_PATTERN = re.compile(r"\b\d{9,18}\b")
+    # URL Pattern
+    URL_PATTERN = re.compile(r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[/\w\.-]*")
     
     @staticmethod
     def extract(text: str) -> dict:
